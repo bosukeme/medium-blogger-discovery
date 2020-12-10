@@ -8,11 +8,12 @@ from newspaper import Article
 import time, os
 from pymongo import MongoClient
 from dotenv import load_dotenv
+from time import sleep
 nest_asyncio.apply()
 
 
 load_dotenv(".env", verbose=True)
-MONGO_URL = os.environ['Mongo_URL']
+MONGO_URL = os.environ['MONGO_URL']
 client = MongoClient(MONGO_URL, retryWrites=False, connect=False)
 
 db = client.medium_blogger_discovery
@@ -25,8 +26,8 @@ today_date = datetime.strftime(today, '%Y-%m-%d')
 yesterday_date = datetime.strftime(yesterday, '%Y-%m-%d')
 last_week_date = datetime.strftime(last_week, '%Y-%m-%d')
 
-num_tweets = 5000 
-num_posts = 100 
+num_tweets = 5000
+num_posts = 100
 
 
 medium_search_list = ['medium post', 'medium article', 'medium blog', 'medium.com']
@@ -37,6 +38,7 @@ search_type_list = ['Medium', 'Substack', 'Blog']
 search_terms_list = [medium_search_list, substack_search_list, blog_search_list]
 
 content_type_search_dict = dict(zip(search_type_list, search_terms_list))
+
 
 
 def available_columns():
@@ -294,7 +296,7 @@ def process_tweets_from_content(content_type, search_list, num_tweets, num_posts
 def save_to_medium_collection(medium_df):
     medium_collection = db.medium_collection
     cur = medium_collection.find() 
-    print('We have %s medium entries at the start' % cur.count())
+    print('We had %s medium entries at the start' % cur.count())
     
     medium_ids=list(medium_collection.find({},{ "_id": 0, "id": 1})) 
     medium_ids=list((val for dic in medium_ids for val in dic.values()))
@@ -304,14 +306,14 @@ def save_to_medium_collection(medium_df):
             medium_collection.insert_one(dfs)
             
     cur = medium_collection.find() 
-    print('We had %s medium entries at the start' % cur.count())
+    print('We have %s medium entries at the end' % cur.count())
 
 
 
 def save_to_blog_collection(blog_df):
     blog_collection = db.blog_collection
     cur = blog_collection.find() 
-    print('We have %s blog entries at the start' % cur.count())
+    print('We had %s blog entries at the start' % cur.count())
         
     blog_ids=list(blog_collection.find({},{ "_id": 0, "id": 1})) 
     blog_ids=list((val for dic in blog_ids for val in dic.values()))
@@ -321,13 +323,13 @@ def save_to_blog_collection(blog_df):
             blog_collection.insert_one(dfs)
             
     cur = blog_collection.find()
-    print('We had %s blog entries at the start' % cur.count())
+    print('We have %s blog entries at the end' % cur.count())
 
 
 def save_to_substack_collection(substack_df):
     substack_collection = db.substack_collection
     cur = substack_collection.find() 
-    print('We have %s substack entries at the start' % cur.count())
+    print('We had %s substack entries at the start' % cur.count())
     
     
     substack_ids=list(substack_collection.find({},{ "_id": 0, "id": 1})) 
@@ -338,9 +340,91 @@ def save_to_substack_collection(substack_df):
             substack_collection.insert_one(dfs)
             
     cur = substack_collection.find()
-    print('We had %s substack entries at the start' % cur.count())
+    print('We have %s substack entries at the end' % cur.count())
 
 
+
+def get_bio_medium_usernames(medium_usernames):
+    user_bio_list = []
+    user_handle_list = []
+    for username in medium_usernames:
+        try:
+            user_name_df = pd.DataFrame()
+
+            c = twint.Config()
+            c.Username = username
+            c.Store_object = True
+            c.User_full = False
+            c.Pandas =True
+            twint.run.Lookup(c)
+            user_df = twint.storage.panda.User_df.drop_duplicates(subset=['id'])
+            user_name = list(user_df['name'])[0]
+            user_bio = list(user_df['bio'])[0]
+            user_handle_list.append(username)
+            user_bio_list.append(user_bio)
+            sleep(5)
+        except:
+            user_name_df = pd.DataFrame()
+
+    user_name_df['username'] = user_handle_list     
+    user_name_df['twitter_bio'] = user_bio_list  
+
+    return user_name_df
+
+def get_bio_substack_usernames(substack_usernames):
+    try:
+        user_bio_list = []
+        user_handle_list = []
+        for username in substack_usernames:
+            print(username)
+            try:
+                user_name_df = pd.DataFrame()
+
+                c = twint.Config()
+                c.Username = username
+                c.Store_object = True
+                c.User_full = False
+                c.Pandas =True
+                twint.run.Lookup(c)
+                user_df = twint.storage.panda.User_df.drop_duplicates(subset=['id'])
+                user_name = list(user_df['name'])[0]
+                user_bio = list(user_df['bio'])[0]
+                user_handle_list.append(username)
+                user_bio_list.append(user_bio)
+                sleep(5)
+            except:
+                user_name_df = pd.DataFrame()
+
+        user_name_df['username'] = user_handle_list     
+        user_name_df['twitter_bio'] = user_bio_list
+    except:
+        user_name_df = pd.DataFrame()
+
+    return user_name_df
+
+def get_bio_blog_usernames(blog_usernames):
+    user_bio_list = []
+    user_handle_list = []
+    for username in blog_usernames:
+        user_name_df = pd.DataFrame()
+        
+        c = twint.Config()
+        c.Username = username
+        c.Store_object = True
+        c.User_full = False
+        c.Pandas =True
+        twint.run.Lookup(c)
+        user_df = twint.storage.panda.User_df.drop_duplicates(subset=['id'])
+        user_name = list(user_df['name'])[0]
+        user_bio = list(user_df['bio'])[0]
+        user_handle_list.append(username)
+        user_bio_list.append(user_bio)
+        sleep(5)
+
+    user_name_df['username'] = user_handle_list     
+    user_name_df['twitter_bio'] = user_bio_list  
+
+    return user_name_df
 
 
 def get_latest_article_tweets(content_type_search_dict, num_tweets, num_posts, yesterday_date):
@@ -355,26 +439,49 @@ def get_latest_article_tweets(content_type_search_dict, num_tweets, num_posts, y
     print('We are now getting the tweets from yesterday related to blogs/articles')
     content_tweet_list = []
     for content_type in content_type_search_dict:
-        try:
-            start = time.time()
-            print(content_type)
-            search_list = content_type_search_dict[content_type]
-        
-            content_tweet_df = process_tweets_from_content(content_type, search_list, num_tweets, num_posts, yesterday_date)
-            content_tweet_df['content_type'] = content_type
-            print(content_tweet_df)
-
-            substack_df = content_tweet_df[content_tweet_df['content_type'] == 'Substack']
-            medium_df = content_tweet_df[content_tweet_df['content_type'] == 'Medium']
-            blog_df = content_tweet_df[content_tweet_df['content_type'] == 'Blog']
-
-            save_to_medium_collection(medium_df)
-            save_to_substack_collection(substack_df)
-            save_to_blog_collection(blog_df)
-        except:
-            pass
+        start = time.time()
+        print(content_type)
+        search_list = content_type_search_dict[content_type]
+    #     print(search_list)
+        content_tweet_df = process_tweets_from_content(content_type, search_list, num_tweets, num_posts, yesterday_date)
+        content_tweet_df['Content Type'] = content_type
+        content_tweet_list.append(content_tweet_df)
+        end = time.time()
+        time_taken = end - start
+        print('%s content extracted in %s seconds' % (content_type, time_taken))
+        print()
+    
+    return content_tweet_list
 
 
 
 def run_the_process():
-    get_latest_article_tweets(content_type_search_dict, num_tweets, num_posts, yesterday_date)
+    content_tweet_list = get_latest_article_tweets(content_type_search_dict, num_tweets, num_posts, yesterday_date)
+    try:
+        medium_usernames = content_tweet_list[0]['username'].tolist()
+        medium_df = get_bio_medium_usernames(medium_usernames)
+        df = content_tweet_list[0]
+        medium_df = medium_df.merge(df, how = 'inner', on='username')
+        medium_df = medium_df.drop_duplicates(['id'],keep='first')
+        save_to_medium_collection(medium_df)
+
+
+        substack_usernames = content_tweet_list[1]['username'].tolist()
+        substack_df = get_bio_substack_usernames(substack_usernames)
+        df1 = content_tweet_list[1]
+        substack_df = substack_df.merge(df1, how = 'inner', on='username')
+        substack_df = substack_df.drop_duplicates(['id'],keep='first')
+        save_to_substack_collection(substack_df)
+
+
+        blog_usernames = content_tweet_list[2]['username'].tolist()
+        blog_df = get_bio_blog_usernames(blog_usernames)
+        df2 = content_tweet_list[2]
+        blog_df = blog_df.merge(df2, how = 'inner', on='username')
+        blog_df = blog_df.drop_duplicates(['id'],keep='first')
+        save_to_blog_collection(blog_df)
+    except:
+        pass
+
+
+run_the_process()
